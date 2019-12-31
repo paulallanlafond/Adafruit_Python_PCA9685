@@ -5,6 +5,7 @@
 from __future__ import division
 from PySide import QtGui, QtCore
 import sys
+import cwiid
 import time
 
 # Import the PCA9685 module.
@@ -12,8 +13,10 @@ import Adafruit_PCA9685
 
 
 # Uncomment to enable debug output.
-#import logging
+import logging
 #logging.basicConfig(level=logging.DEBUG)
+
+import ui.slider_gui as slider_gui
 
 # Initialise the PCA9685 using the default address (0x40).
 pwm = Adafruit_PCA9685.PCA9685()
@@ -26,6 +29,12 @@ pwm = Adafruit_PCA9685.PCA9685()
 #servo_max = 600  # Max pulse length out of 4096
 servo_min = 170  # Min pulse length out of 4096
 servo_max = 580  # Max pulse length out of 4096
+CHANNLE_DICT = {'table': 1, 'arm': 0, 'elbow': 2, 'forearm': 4, 'wrist_spin': 3, 'wrist_spin_2': 5}
+
+
+# Set frequency to 60hz, good for servos.
+pwm.set_pwm_freq(60)
+
 
 # Helper function to make setting a servo pulse width simpler.
 def set_servo_pulse(channel, pulse):
@@ -39,18 +48,9 @@ def set_servo_pulse(channel, pulse):
     print('channel:{}  pulse:{}'.format(channel, pulse))
     pwm.set_pwm(channel, 0, pulse)
 
-# Set frequency to 60hz, good for servos.
-pwm.set_pwm_freq(60)
-
 
 def move_servo(channel, pulse):
-    print('Moving servo on channel {}, press Ctrl-C to quit...\n'.format(channel))
     pwm.set_pwm(channel, 0, pulse)
-    time.sleep(1)
-
-
-def get_user_input():
-    return input('enter channel and pulse. ex: 1,200\n').split(',')
 
 
 def get_safe_pulse(value):
@@ -62,14 +62,58 @@ def get_safe_pulse(value):
     return int(value)
 
 
+def print_paths():
+    for path in sys.path:
+        print(path)
+
+
+class slider_interface(QtGui.QMainWindow):
+    def __init__(self, parent=None):
+        super(slider_interface, self).__init__(parent)
+        self.ui = slider_gui.Ui_MainWindow()
+        self.ui.setupUi(self)
+        self.reset_robot()
+        self.setup_signals()
+
+    def reset_robot(self):
+        move_servo(CHANNLE_DICT['table'], 300)
+        self.ui.slider_table.setValue(300)
+        move_servo(CHANNLE_DICT['arm'], 500)
+        self.ui.slider_arm.setValue(500)
+        move_servo(CHANNLE_DICT['elbow'], 400)
+        self.ui.slider_elbow.setValue(400)
+        move_servo(CHANNLE_DICT['forearm'], 200)
+        self.ui.slider_forearm.setValue(200)
+        move_servo(CHANNLE_DICT['wrist_spin'], 400)
+        self.ui.slider_wrist_spin.setValue(400)
+        move_servo(CHANNLE_DICT['wrist_spin_2'], 400)
+        self.ui.slider_wrist_spin_2.setValue(400)
+
+        move_servo(2, 100)
+        move_servo(3, 300)
+        move_servo(4, 300)
+        move_servo(5, 300)
+
+    def setup_signals(self):
+        self.ui.slider_arm.valueChanged.connect(lambda: self.slider_moved(axis='arm'))
+        self.ui.slider_table.valueChanged.connect(lambda: self.slider_moved(axis='table'))
+        self.ui.slider_elbow.valueChanged.connect(lambda: self.slider_moved(axis='elbow'))
+        self.ui.slider_forearm.valueChanged.connect(lambda: self.slider_moved(axis='forearm'))
+        self.ui.slider_wrist_spin.valueChanged.connect(lambda: self.slider_moved(axis='wrist_spin'))
+        self.ui.slider_wrist_spin_2.valueChanged.connect(lambda: self.slider_moved(axis='wrist_spin_2'))
+
+    def slider_moved(self, axis):
+        value = eval('self.ui.slider_{}.value()'.format(axis))
+        pulse = get_safe_pulse(value)
+        channel = CHANNLE_DICT[axis]
+        move_servo(channel, pulse)
+
+
 if __name__ == '__main__':
-    # app = QtGui.QApplication(sys.argv)
-    # label = QtGui.QLabel('fart face')
-    # label.show()
-    # app.exec_()
-    # sys.exit()
-    while True:
-        channel, pulse = get_user_input()
-        pulse = get_safe_pulse(pulse)
-        move_servo(int(channel), pulse)
-        #set_servo_pulse(int(channel), float(pulse))
+    print_paths()
+    app = QtGui.QApplication(sys.argv)
+    gui = slider_interface()
+    gui.show()
+    app.exec_()
+    sys.exit()
+
